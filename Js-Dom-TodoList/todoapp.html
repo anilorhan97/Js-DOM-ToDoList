@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css"  />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" >
+    <style>
+        .dropdown-toggle::after {
+            display: none;
+        }
+        .task { /*Her li elemanı için display flex olup yanyana ve ortalanır. Sağ ve sola gitmelerii için spacebetween kullanılır.*/
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .task label.checked {
+            text-decoration: line-through;
+        }
+        .controls{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .filters span.active{ /*Span içinde aktif classına sahip olanlar için*/
+            color: #3C87FF;
+        }
+        .filters span{
+            margin-right: 5px;
+            font-size: 15px;
+            color: #444444;
+            cursor: pointer;
+        }
+    </style>
+    <title>Document</title>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        Todo App
+                    </div>
+                    <div class="card-body">
+                        <form>
+                            <div class="input-group"> <!--input group ile yanyana görüntü..-->
+                                <input type="text" id="txtTaskName" class="form-control">
+                                <button type="submit" class="btn btn-primary" id="btnAddNewTask">EKLE</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="card mt-3">
+                    <div class="card-header controls">
+                        <div class="filters">
+                            <span class="active" id="all">Hepsi</span>
+                            <span id="pending">Yapılacaklar</span>
+                            <span id="completed">Tamamlanan</span>
+                        </div>
+                        <button id="btnClear" class="btn btn-danger btn-sm float-end">TEMİZLE</button>
+                    </div>
+                    <ul id="task-list" class="list-group list-group-flush"> <!--Flush ile köşeleri olmaması için..-->                    
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+    <script> 
+        //Aşağıdaki yapı json yapısı gibidir. Bu şekilde uygulanıyor.
+        let gorevListesi = [];
+
+        //Uyg ilk çalıştığında gorevListesi diye parametre olmayacak. Bu bilgiyi saklayacağız. Eğer
+        //görev listesi localstorage içerisinde varsa yukarıda tanımlanan gorevListesi üzerine localstorage üzerinden gelen bilgiyi getitem fonksiyonu ile al ve aktar
+        //Bilgiyi proje içerisindeki diziye direkt aktaramayız. Yapılması gereken tarayıcı içerisinde Json veri yapısında kullanırız. 
+        if(localStorage.getItem("gorevListesi") !==null){
+            gorevListesi =JSON.parse(localStorage.getItem("gorevListesi"));
+            //gorevListesi'ni localStorage'ye setItem ile aktarırız.
+        }
+
+        let editId;
+        let isEditTask = false; //Mod bilgisi ilk başta false. Edit modunda değiliz. Edite tıklayınca mode true olacak.
+        const taskInput = document.querySelector("#txtTaskName");
+        const btnClear = document.querySelector("#btnClear");
+        const filters = document.querySelectorAll(".filters span");
+        displayTask("all"); 
+        //Tekrar eklemek için fonksiyon içine alınır. Sayfa yüklendiğinde listelenmez. Listelenmesi için fonksiyonu çağırmak gerekir.
+        
+        function displayTask(filter){
+            let ul = document.getElementById("task-list");
+            ul.innerHTML=""; //Tekrarlanmaması için ul elemanları sıfırlanır gibi boş olur. Ekleme yapılınca tekrar gelirler..
+            
+            if(gorevListesi.length==0){
+                ul.innerHTML ="<p class='p-3 m-0'>Görev listeni boş.</p>"
+            }
+            else{
+                for ( let gorev of gorevListesi){ //Görev listesi altındaki bütün elemanları of operatörü ile yazdırma
+                    let completed = gorev.durum == "completed" ? "checked": "";
+                    //Completed ise checked'i aktarırız. pending varsa üstteki boş kısma bir şey gelmez.
+                    //Manuel olarak tıklayıp üstünü çizmek için input'a onclick ekleyip this yani checkbox'ı belirtiriz. 
+                    
+                    if(filter == gorev.durum || filter == "all"){
+                        let li = `
+                    <li class="task list-group-item">
+                        <div class="form-check">
+                            <input onclick="updateStatus(this)" type="checkbox" id="${gorev.id}" class="form-check-input" ${completed}>
+                            <label for="${gorev.id}" class="form-check-label ${completed}">${gorev.gorevAdi}</label>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-link dropdown-toggle" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fa-solid fa-ellipsis"></i>
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+                                <li><a onclick="deleteTask(${gorev.id})" class="dropdown-item" href="#"><i class="fa-sharp fa-solid fa-trash-can"></i> Sil</a></li>
+                                <li><a onclick='editTask(${gorev.id},"${gorev.gorevAdi}")' class="dropdown-item" href="#"><i class="fa-solid fa-pen"></i> Düzenle</a></li>
+                            </ul> 
+                        </div>
+                    </li>
+                `; //Oluşturulan li elemanı alttaki kod ile eklenir. Not: For içinde olmalı
+           
+                ul.insertAdjacentHTML("beforeend",li) //insetAdjacentHTML metodu ekleme yapar. İlk kısım ikinci kısım olan li'ye göre şekillenir
+                //W3School ile detaylı bakılabilir. Afterbegin,afterend,beforebegin,beforeend vs
+                //Beforeend ile bir önceki elemandan sonrakine uygular Lİ DEĞİŞKENİNİ !!! Görev 1 varsa sonraki Görev 2 olarak gelir.
+                    }
+                }
+            }
+        }
+
+        document.querySelector("#btnAddNewTask").addEventListener("click",newTask);
+        document.querySelector("#btnAddNewTask").addEventListener("keypress",function(){
+            if(event.key == "Enter"){ //Filtreleme yapıldı. Entere basıldığında butona tıklanmış gibi oluyor ve aşağıdaki kod çalışıyor.
+                document.getElementById("btnAddNewTask").click();
+            }
+        });
+
+        for(let span of filters){
+            span.addEventListener("click",function(){
+                document.querySelector("span.active").classList.remove("active"); //Spana tıklanınca active class'ına sahip olanın active class'ını kaldır.
+                span.classList.add("active"); //Sonra tıklanan span'a active class'ı ekle
+                displayTask(span.id); //Spana tıkladığımızda o anda tıklanılan span id'i gönderilir.
+            });
+        }
+
+        function newTask(event){            
+            if(taskInput.value ==""){ //Boş ise uyarı, dolu ise ekleme işlemi çalışacak.
+            alert("Görev Girilmedi!");
+            }
+            else{
+                if(!isEditTask){
+                    //ekleme
+                    gorevListesi.push({"id": gorevListesi.length+1, "gorevAdi":taskInput.value, "durum":"pending"})
+                }
+                else{
+                    //güncelleme
+                    for(let gorev of gorevListesi){
+                        if(gorev.id == editId){
+                            gorev.gorevAdi = taskInput.value;
+                        }
+                        isEditTask = false; // Güncelleme işlemi bittikten sonra tekrar false olur.
+                    }
+                }
+                taskInput.value=""; //Ekleme işlemi yapıldıktan sonra input kısmı temizlenecek.
+                displayTask(document.querySelector("span.active").id); //Yeni eleman liste sonuna eklendikten sonra tekrar displayTask metodu çağırılır.
+                localStorage.setItem("gorevListesi",JSON.stringify(gorevListesi));
+                //localstrogate üzerinden setitem çağır. gorevListesi adında alan oluştur (key bilgisi)
+                //Bu bilgiyi saklarken de uyg tarafında oluşturduğumuz Json türündeki veriyi(object) tarayıcıda string formatında olan Json stringine çevir. 
+            //NOT ! : Eklemeden sonra application'dan kontrol edililebilir. Json türünde bir bilgi olur. 
+            //Atarken JSON STRINGINE ÇEVRİLİR. JSON STRINGINDE OLANI UYG TARAFINDA JSON PARSE ILE OBJEYE ÇEVİRİP KULLANABİLİRİZ. 
+            }
+            event.preventDefault();
+        }
+
+        function deleteTask(id){ //Seçili id'e göre silme işlemi yapılacaktır.
+        let deletedId;
+            //for ile silme
+            // for(let index in gorevListesi){ //İndexle uğraştığımız için in kullanıldı.
+            //     if(gorevListesi[index].id == id) { //Dışarıdan gönderdiğimiz id ile eşitlik kontrol edilir.
+            //         deletedId = index;
+            //     }
+            // }
+
+            //Findindex ile silme
+            // deletedId = gorevListesi.findIndex(function(gorev){
+            //     return gorev.id == id;
+            // })
+
+            //arrow function
+            deletedId = gorevListesi.findIndex(gorev => gorev.id == id);
+            gorevListesi.splice(deletedId, 1); //Belirtilen indexten itibaren 1 tane eleman sil..
+            displayTask(document.querySelector("span.active").id);
+            localStorage.setItem("gorevListesi",JSON.stringify(gorevListesi));
+        }   
+
+        function editTask(taskId,taskName){
+            editId = taskId;
+            isEditTask = true; //Başlangıçta edit modunda değiliz fakat herhangibir güncelleme çağırılacağı zaman true olacak.
+            taskInput.value = taskName; //Güncelleme butonunda taskName gorev.gorevadi'na denk geliyor
+            taskInput.focus();
+            taskInput.classList.add("active"); //Yeni bir active classı ekleniyor. Maviye boyanıyor..
+        }
+
+        btnClear.addEventListener("click",function(){
+            gorevListesi.splice(0,gorevListesi.length);
+            localStorage.setItem("gorevListesi",JSON.stringify(gorevListesi));
+            displayTask();
+        })
+
+        function updateStatus(selectedTask){
+            let label = selectedTask.nextElementSibling; //Sibling ile inputtan sonraki aynı hizadaki kısma gider yani label'a..
+            let durum;
+            if(selectedTask.checked){
+                label.classList.add("checked");
+                durum = "completed";
+            }
+            else{
+                label.classList.remove("checked");
+                durum = "pending";
+            }
+
+            for(let gorev of gorevListesi){
+                if(gorev.id == selectedTask.id){
+                    gorev.durum = durum;
+                }
+            }
+            displayTask(document.querySelector("span.active").id);
+            localStorage.setItem("gorevListesi",JSON.stringify(gorevListesi));
+        }
+    </script>
+</body>
+</html>
